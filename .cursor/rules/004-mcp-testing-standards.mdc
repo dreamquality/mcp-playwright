@@ -1,0 +1,206 @@
+---
+description: Testing standards and practices for MCP TypeScript server development
+globs: ["src/**/*.test.ts", "src/**/*.spec.ts", "tests/**/*.ts"]
+alwaysApply: true
+---
+# MCP Testing Standards
+
+## Context
+- When writing tests for MCP TypeScript servers
+- When implementing unit, integration, and e2e tests
+- When setting up test environments and configurations
+
+## Test Structure
+
+### Unit Tests
+```typescript
+import { describe, it, expect, beforeEach } from '@jest/globals';
+
+describe('ResourceProvider', () => {
+  let provider: ResourceProvider;
+  
+  beforeEach(() => {
+    provider = new ResourceProvider();
+  });
+  
+  it('should create a new resource', async () => {
+    const result = await provider.create({ /* test data */ });
+    expect(result).toBeDefined();
+    expect(result.id).toBeTruthy();
+  });
+});
+```
+
+### Integration Tests
+```typescript
+describe('ResourceController Integration', () => {
+  let app: Express;
+  let server: Server;
+  
+  beforeAll(async () => {
+    app = await setupTestServer();
+    server = app.listen(0);
+  });
+  
+  afterAll(async () => {
+    await server.close();
+  });
+  
+  it('should handle resource creation request', async () => {
+    const response = await request(app)
+      .post('/resources')
+      .send({ /* test data */ });
+    
+    expect(response.status).toBe(201);
+    expect(response.body).toHaveProperty('id');
+  });
+});
+```
+
+## Test Categories
+
+### 1. Unit Tests
+- Test individual components in isolation
+- Mock external dependencies
+- Focus on business logic
+- Maintain high coverage (>80%)
+
+### 2. Integration Tests
+- Test component interactions
+- Use test databases
+- Test API endpoints
+- Validate error handling
+
+### 3. E2E Tests
+- Test complete workflows
+- Simulate user scenarios
+- Test with real dependencies
+- Validate system integration
+
+## Test Configuration
+
+### Jest Configuration
+```javascript
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    }
+  },
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1'
+  }
+};
+```
+
+### Test Environment Setup
+```typescript
+// tests/setup.ts
+import { setupTestDatabase } from './utils/database';
+import { setupTestCache } from './utils/cache';
+
+beforeAll(async () => {
+  await setupTestDatabase();
+  await setupTestCache();
+});
+
+afterAll(async () => {
+  await cleanupTestDatabase();
+  await cleanupTestCache();
+});
+```
+
+## Mocking Standards
+
+### Mock Examples
+```typescript
+// Mock Provider
+const mockProvider = {
+  create: jest.fn(),
+  update: jest.fn(),
+  delete: jest.fn(),
+  find: jest.fn()
+};
+
+// Mock External Service
+jest.mock('@/services/external', () => ({
+  ExternalService: jest.fn().mockImplementation(() => ({
+    request: jest.fn().mockResolvedValue({ data: 'test' })
+  }))
+}));
+```
+
+## Test Data Management
+
+### Factories
+```typescript
+// factories/resource.ts
+import { faker } from '@faker-js/faker';
+
+export const createResourceData = (override = {}) => ({
+  id: faker.string.uuid(),
+  name: faker.string.alphanumeric(10),
+  createdAt: faker.date.recent(),
+  ...override
+});
+```
+
+## Critical Rules
+
+1. Test Organization
+   - Group related tests
+   - Use descriptive test names
+   - Follow AAA pattern (Arrange-Act-Assert)
+
+2. Test Coverage
+   - Maintain minimum coverage thresholds
+   - Test edge cases
+   - Test error scenarios
+
+3. Test Performance
+   - Optimize test execution
+   - Parallelize when possible
+   - Clean up test data
+
+4. Test Maintenance
+   - Keep tests up to date
+   - Refactor tests with code
+   - Document test requirements
+
+## Best Practices
+
+1. Naming Conventions
+   - `*.test.ts` for unit tests
+   - `*.spec.ts` for integration tests
+   - `*.e2e.ts` for end-to-end tests
+
+2. Test Structure
+   - One assertion per test
+   - Clear test descriptions
+   - Proper setup and teardown
+
+3. Mock Usage
+   - Mock external dependencies
+   - Use realistic mock data
+   - Document mock behavior
+
+4. Test Isolation
+   - Independent test cases
+   - Clean test environment
+   - No shared state
+
+5. Error Testing
+   - Test error conditions
+   - Validate error messages
+   - Test error handling
+
+6. Continuous Integration
+   - Run tests on every commit
+   - Enforce coverage requirements
+   - Generate test reports 

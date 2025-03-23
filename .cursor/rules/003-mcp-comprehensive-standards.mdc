@@ -1,0 +1,293 @@
+---
+description: Comprehensive standards for MCP TypeScript server development including architecture, resources, prompts, sampling, and SDK implementation
+globs: ["src/**/*.ts", "src/**/*.tsx"]
+alwaysApply: true
+---
+# MCP Comprehensive Development Standards
+
+## Context
+- When developing MCP (Model-Controller-Provider) TypeScript servers
+- When integrating LLM capabilities and prompt engineering
+- When implementing sampling and model interaction
+- When using TypeScript SDK for MCP development
+
+## Architecture Guidelines (@architecture-mcp)
+
+### Core MCP Pattern
+```typescript
+// Base interfaces
+interface IModel {
+  id: string;
+  validate(): boolean;
+  toJSON(): Record<string, unknown>;
+}
+
+interface IController {
+  readonly provider: IProvider;
+  handleRequest(req: Request, res: Response, next: NextFunction): Promise<void>;
+}
+
+interface IProvider {
+  readonly model: typeof IModel;
+  create(data: unknown): Promise<IModel>;
+  validate(data: unknown): Promise<boolean>;
+}
+```
+
+### Directory Structure
+```
+src/
+  ├── models/           # Data models and interfaces
+  │   ├── base/        # Base model classes
+  │   └── types/       # Model type definitions
+  ├── controllers/     # Request handlers
+  │   ├── base/        # Base controller classes
+  │   └── middleware/  # Controller-specific middleware
+  ├── providers/       # Business logic
+  │   ├── base/        # Base provider classes
+  │   └── services/    # External service integrations
+  ├── llm/            # LLM integration
+  │   ├── prompts/     # Prompt templates
+  │   ├── sampling/    # Sampling strategies
+  │   └── models/      # Model configurations
+  ├── config/         # Application configuration
+  ├── utils/          # Shared utilities
+  └── tests/          # Test suites
+```
+
+## Resource Management (@resources-mcp)
+
+### Resource Lifecycle
+```typescript
+abstract class BaseResource<T extends IModel> {
+  protected abstract resourceName: string;
+  
+  async initialize(): Promise<void> {
+    // Resource initialization logic
+  }
+  
+  async cleanup(): Promise<void> {
+    // Resource cleanup logic
+  }
+  
+  async validate(): Promise<boolean> {
+    // Resource validation logic
+  }
+}
+```
+
+### Resource Pool Management
+```typescript
+class ResourcePool<T extends BaseResource> {
+  private pool: Map<string, T> = new Map();
+  
+  async acquire(id: string): Promise<T> {
+    // Resource acquisition logic
+  }
+  
+  async release(id: string): Promise<void> {
+    // Resource release logic
+  }
+}
+```
+
+## Tools and Development (@tools-mcp)
+
+### Development Tools
+- TypeScript compiler with strict mode
+- ESLint with MCP-specific rules
+- Jest for testing
+- OpenAPI/Swagger for API documentation
+
+### Required VS Code Extensions
+- ESLint
+- Prettier
+- TypeScript Debugger
+- REST Client
+
+### Git Hooks
+```json
+{
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run test"
+    }
+  }
+}
+```
+
+## Prompt Engineering (@prompts-mcp)
+
+### Prompt Template Structure
+```typescript
+interface PromptTemplate {
+  name: string;
+  version: string;
+  template: string;
+  parameters: PromptParameter[];
+  validation: PromptValidation;
+}
+
+interface PromptParameter {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'array';
+  required: boolean;
+  default?: unknown;
+}
+```
+
+### Prompt Management
+```typescript
+class PromptManager {
+  private templates: Map<string, PromptTemplate> = new Map();
+  
+  async loadTemplate(name: string): Promise<PromptTemplate> {
+    // Template loading logic
+  }
+  
+  async renderPrompt(template: PromptTemplate, params: Record<string, unknown>): Promise<string> {
+    // Prompt rendering logic
+  }
+}
+```
+
+## Sampling and Model Integration (@sampling-mcp)
+
+### Sampling Configuration
+```typescript
+interface SamplingConfig {
+  temperature: number;
+  topP: number;
+  frequencyPenalty: number;
+  presencePenalty: number;
+  maxTokens: number;
+}
+
+class SamplingStrategy {
+  constructor(private config: SamplingConfig) {}
+  
+  async sample(prompt: string): Promise<string> {
+    // Sampling logic
+  }
+}
+```
+
+### Model Integration
+```typescript
+interface ModelConfig {
+  modelName: string;
+  version: string;
+  sampling: SamplingConfig;
+  contextWindow: number;
+}
+
+class ModelManager {
+  async loadModel(config: ModelConfig): Promise<void> {
+    // Model loading logic
+  }
+  
+  async generateResponse(prompt: string): Promise<string> {
+    // Response generation logic
+  }
+}
+```
+
+## TypeScript SDK Implementation (@typescript-sdk)
+
+### SDK Configuration
+```typescript
+interface SDKConfig {
+  apiKey: string;
+  baseURL: string;
+  timeout: number;
+  retryConfig: RetryConfig;
+}
+
+class MCPClient {
+  constructor(private config: SDKConfig) {}
+  
+  async initialize(): Promise<void> {
+    // SDK initialization logic
+  }
+}
+```
+
+### Error Handling
+```typescript
+class MCPError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public statusCode: number,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'MCPError';
+  }
+}
+```
+
+## Critical Rules
+
+1. Architecture
+   - Follow strict MCP pattern separation
+   - Implement proper dependency injection
+   - Use TypeScript decorators for metadata
+
+2. Resource Management
+   - Implement proper resource lifecycle
+   - Use connection pooling
+   - Handle cleanup properly
+
+3. Development
+   - Use provided linting rules
+   - Follow Git commit conventions
+   - Maintain test coverage > 80%
+
+4. Prompts
+   - Version all prompt templates
+   - Validate prompt parameters
+   - Document prompt purposes
+
+5. Sampling
+   - Configure appropriate sampling parameters
+   - Implement retry mechanisms
+   - Monitor token usage
+
+6. SDK
+   - Use proper error handling
+   - Implement rate limiting
+   - Follow semantic versioning
+
+## Best Practices
+
+1. Code Organization
+   - One class per file
+   - Clear file naming conventions
+   - Proper module exports
+
+2. Error Handling
+   - Custom error classes
+   - Proper error propagation
+   - Comprehensive error logging
+
+3. Testing
+   - Unit tests for all components
+   - Integration tests for flows
+   - Performance testing
+
+4. Documentation
+   - JSDoc comments
+   - API documentation
+   - Architecture diagrams
+
+5. Security
+   - Input validation
+   - Rate limiting
+   - Authentication/Authorization
+
+6. Performance
+   - Caching strategies
+   - Asynchronous operations
+   - Resource pooling 

@@ -1,0 +1,274 @@
+---
+description: Monitoring and logging standards for MCP TypeScript server development
+globs: ["src/**/*.ts", "config/**/*.ts"]
+alwaysApply: true
+---
+# MCP Monitoring and Logging Standards
+
+## Context
+- When implementing monitoring in MCP servers
+- When setting up logging infrastructure
+- When implementing metrics collection
+- When setting up alerts and notifications
+
+## Logging System
+
+### Logger Configuration
+```typescript
+interface LoggerConfig {
+  level: 'debug' | 'info' | 'warn' | 'error';
+  format: 'json' | 'pretty';
+  outputs: ('console' | 'file')[];
+  correlationIdKey: string;
+}
+
+class Logger {
+  private static instance: Logger;
+  private winston: Winston.Logger;
+  
+  private constructor(config: LoggerConfig) {
+    this.winston = this.setupLogger(config);
+  }
+  
+  private setupLogger(config: LoggerConfig): Winston.Logger {
+    return winston.createLogger({
+      level: config.level,
+      format: config.format === 'json' ? winston.format.json() : winston.format.simple(),
+      transports: this.setupTransports(config)
+    });
+  }
+  
+  static getInstance(config: LoggerConfig): Logger {
+    if (!Logger.instance) {
+      Logger.instance = new Logger(config);
+    }
+    return Logger.instance;
+  }
+  
+  log(level: string, message: string, meta?: Record<string, unknown>): void {
+    this.winston.log(level, message, {
+      timestamp: new Date().toISOString(),
+      correlationId: this.getCorrelationId(),
+      ...meta
+    });
+  }
+}
+```
+
+### Request Logging Middleware
+```typescript
+const requestLogger = (logger: Logger) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const start = Date.now();
+    const correlationId = req.headers['x-correlation-id'] || uuid();
+    
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      logger.log('info', 'Request completed', {
+        method: req.method,
+        url: req.url,
+        status: res.statusCode,
+        duration,
+        correlationId
+      });
+    });
+    
+    next();
+  };
+};
+```
+
+## Metrics Collection
+
+### Prometheus Integration
+```typescript
+import client from 'prom-client';
+
+class MetricsCollector {
+  private static instance: MetricsCollector;
+  private registry: client.Registry;
+  
+  private constructor() {
+    this.registry = new client.Registry();
+    this.setupMetrics();
+  }
+  
+  private setupMetrics(): void {
+    // HTTP request metrics
+    new client.Counter({
+      name: 'http_requests_total',
+      help: 'Total number of HTTP requests',
+      labelNames: ['method', 'path', 'status'],
+      registers: [this.registry]
+    });
+    
+    // Response time histogram
+    new client.Histogram({
+      name: 'http_request_duration_seconds',
+      help: 'HTTP request duration in seconds',
+      labelNames: ['method', 'path'],
+      buckets: [0.1, 0.5, 1, 2, 5],
+      registers: [this.registry]
+    });
+  }
+  
+  static getInstance(): MetricsCollector {
+    if (!MetricsCollector.instance) {
+      MetricsCollector.instance = new MetricsCollector();
+    }
+    return MetricsCollector.instance;
+  }
+  
+  getMetrics(): Promise<string> {
+    return this.registry.metrics();
+  }
+}
+```
+
+## Health Checks
+
+### Health Check Implementation
+```typescript
+interface HealthCheck {
+  name: string;
+  check(): Promise<boolean>;
+}
+
+class HealthChecker {
+  private checks: HealthCheck[] = [];
+  
+  addCheck(check: HealthCheck): void {
+    this.checks.push(check);
+  }
+  
+  async performHealthCheck(): Promise<HealthCheckResult> {
+    const results = await Promise.all(
+      this.checks.map(async (check) => {
+        try {
+          const isHealthy = await check.check();
+          return {
+            name: check.name,
+            status: isHealthy ? 'healthy' : 'unhealthy',
+            timestamp: new Date().toISOString()
+          };
+        } catch (error) {
+          return {
+            name: check.name,
+            status: 'unhealthy',
+            error: error.message,
+            timestamp: new Date().toISOString()
+          };
+        }
+      })
+    );
+    
+    return {
+      status: results.every(r => r.status === 'healthy') ? 'healthy' : 'unhealthy',
+      checks: results,
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+```
+
+## Alert Configuration
+
+### Alert Manager
+```typescript
+interface AlertConfig {
+  name: string;
+  condition: string;
+  threshold: number;
+  duration: string;
+  severity: 'info' | 'warning' | 'critical';
+}
+
+class AlertManager {
+  private alerts: Map<string, AlertConfig> = new Map();
+  
+  addAlert(alert: AlertConfig): void {
+    this.alerts.set(alert.name, alert);
+  }
+  
+  async checkAlerts(metrics: MetricsData): Promise<Alert[]> {
+    const triggeredAlerts: Alert[] = [];
+    
+    for (const [name, config] of this.alerts) {
+      if (await this.evaluateAlert(config, metrics)) {
+        triggeredAlerts.push({
+          name,
+          severity: config.severity,
+          message: `Alert ${name} triggered: ${config.condition}`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    
+    return triggeredAlerts;
+  }
+}
+```
+
+## Critical Rules
+
+1. Logging
+   - Use structured logging
+   - Include correlation IDs
+   - Log appropriate levels
+
+2. Metrics
+   - Define key metrics
+   - Use appropriate metric types
+   - Include proper labels
+
+3. Health Checks
+   - Implement comprehensive checks
+   - Include dependency health
+   - Set appropriate timeouts
+
+4. Alerting
+   - Define alert thresholds
+   - Set up notification channels
+   - Configure alert severity
+
+5. Monitoring
+   - Monitor system resources
+   - Track application metrics
+   - Monitor dependencies
+
+6. Tracing
+   - Implement distributed tracing
+   - Track request flow
+   - Measure latencies
+
+## Best Practices
+
+1. Logging Strategy
+   - Use log levels appropriately
+   - Include contextual information
+   - Implement log rotation
+
+2. Metric Collection
+   - Choose relevant metrics
+   - Use appropriate metric types
+   - Implement custom metrics
+
+3. Health Monitoring
+   - Regular health checks
+   - Dependency monitoring
+   - Performance monitoring
+
+4. Alert Management
+   - Define alert policies
+   - Set up escalations
+   - Document procedures
+
+5. Visualization
+   - Create useful dashboards
+   - Set up metric visualization
+   - Configure log analysis
+
+6. Documentation
+   - Document monitoring setup
+   - Include alert responses
+   - Maintain runbooks 

@@ -1,0 +1,270 @@
+---
+description: Deployment and configuration standards for MCP TypeScript server development
+globs: ["**/*.ts", "deployment/**/*", "config/**/*", "docker/**/*"]
+alwaysApply: true
+---
+# MCP Deployment and Configuration Standards
+
+## Context
+- When deploying MCP servers
+- When managing configurations
+- When setting up CI/CD pipelines
+- When containerizing applications
+
+## Configuration Management
+
+### Environment Configuration
+```typescript
+interface EnvironmentConfig {
+  NODE_ENV: 'development' | 'staging' | 'production';
+  PORT: number;
+  LOG_LEVEL: 'debug' | 'info' | 'warn' | 'error';
+  DATABASE_URL: string;
+  REDIS_URL?: string;
+  API_VERSION: string;
+}
+
+class ConfigLoader {
+  private static instance: ConfigLoader;
+  private config: EnvironmentConfig;
+  
+  private constructor() {
+    this.config = this.loadConfig();
+  }
+  
+  private loadConfig(): EnvironmentConfig {
+    // Load and validate environment variables
+    return {
+      NODE_ENV: process.env.NODE_ENV as 'development' | 'staging' | 'production',
+      PORT: parseInt(process.env.PORT || '3000', 10),
+      LOG_LEVEL: process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error',
+      DATABASE_URL: process.env.DATABASE_URL!,
+      REDIS_URL: process.env.REDIS_URL,
+      API_VERSION: process.env.API_VERSION!
+    };
+  }
+  
+  static getInstance(): ConfigLoader {
+    if (!ConfigLoader.instance) {
+      ConfigLoader.instance = new ConfigLoader();
+    }
+    return ConfigLoader.instance;
+  }
+  
+  getConfig(): EnvironmentConfig {
+    return this.config;
+  }
+}
+```
+
+## Docker Configuration
+
+### Dockerfile
+```dockerfile
+# Build stage
+FROM node:18-alpine as builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine
+
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+RUN npm ci --production
+
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+### Docker Compose
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://user:pass@db:5432/dbname
+    depends_on:
+      - db
+      - redis
+  
+  db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=dbname
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+## CI/CD Pipeline
+
+### GitHub Actions
+```yaml
+name: MCP Server CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '18'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v2
+      - uses: docker/setup-buildx-action@v1
+      - uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
+```
+
+## Kubernetes Deployment
+
+### Deployment Configuration
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mcp-server
+  template:
+    metadata:
+      labels:
+        app: mcp-server
+    spec:
+      containers:
+        - name: mcp-server
+          image: ghcr.io/org/mcp-server:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: url
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+```
+
+## Critical Rules
+
+1. Configuration Management
+   - Use environment variables
+   - Implement config validation
+   - Secure sensitive data
+
+2. Docker Setup
+   - Multi-stage builds
+   - Optimize image size
+   - Security best practices
+
+3. CI/CD Pipeline
+   - Automated testing
+   - Security scanning
+   - Deployment automation
+
+4. Kubernetes Deployment
+   - Resource management
+   - Health monitoring
+   - Scaling configuration
+
+5. Security
+   - Secret management
+   - Network policies
+   - Access controls
+
+6. Monitoring
+   - Health checks
+   - Resource monitoring
+   - Logging setup
+
+## Best Practices
+
+1. Environment Management
+   - Environment separation
+   - Configuration validation
+   - Secret rotation
+
+2. Container Security
+   - Minimal base images
+   - Non-root users
+   - Security scanning
+
+3. Deployment Strategy
+   - Rolling updates
+   - Backup procedures
+   - Rollback plans
+
+4. Resource Management
+   - Resource limits
+   - Auto-scaling
+   - Load balancing
+
+5. Monitoring
+   - Metrics collection
+   - Log aggregation
+   - Alert configuration
+
+6. Documentation
+   - Deployment guides
+   - Configuration docs
+   - Troubleshooting guides 

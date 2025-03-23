@@ -1,0 +1,176 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# MCP TypeScript Server Standards
+
+## Context
+- When developing or modifying MCP (Model-Controller-Provider) TypeScript servers
+- When creating new endpoints, services, or providers
+- When implementing business logic and data handling
+
+## Architecture Overview
+### Directory Structure
+```
+src/
+  ├── controllers/     # Request handlers and route definitions
+  ├── models/         # Data models and interfaces
+  ├── providers/      # Business logic and data access
+  ├── middleware/     # Custom middleware functions
+  ├── utils/         # Shared utilities and helpers
+  ├── config/        # Configuration files
+  ├── types/         # TypeScript type definitions
+  └── tests/         # Unit and integration tests
+```
+
+## Coding Standards
+
+### General TypeScript Guidelines
+- Use strict TypeScript configuration (`strict: true` in tsconfig.json)
+- Prefer interfaces over types for object definitions
+- Use enums for fixed sets of values
+- Implement proper error handling with custom error classes
+- Use async/await over raw promises
+- Implement proper logging using a structured logger
+
+### Models
+```typescript
+// Example Model Structure
+interface IUser {
+  id: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+class User implements IUser {
+  id: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+
+  constructor(data: IUser) {
+    this.id = data.id;
+    this.email = data.email;
+    this.createdAt = data.createdAt;
+    this.updatedAt = data.updatedAt;
+  }
+
+  // Add model methods here
+}
+```
+
+### Controllers
+```typescript
+// Example Controller Structure
+class UserController {
+  constructor(private userProvider: UserProvider) {}
+
+  async getUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const user = await this.userProvider.getUser(req.params.id);
+      res.json(user);
+    } catch (error) {
+      next(error);
+    }
+  }
+}
+```
+
+### Providers
+```typescript
+// Example Provider Structure
+class UserProvider {
+  constructor(private db: Database) {}
+
+  async getUser(id: string): Promise<User> {
+    try {
+      const userData = await this.db.users.findById(id);
+      if (!userData) {
+        throw new NotFoundError('User not found');
+      }
+      return new User(userData);
+    } catch (error) {
+      throw new DatabaseError('Failed to fetch user', { cause: error });
+    }
+  }
+}
+```
+
+## Error Handling
+- Create custom error classes extending Error
+- Include error codes and messages
+- Implement global error handling middleware
+- Log errors with appropriate severity levels
+
+```typescript
+class AppError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number = 500,
+    public code: string = 'INTERNAL_ERROR'
+  ) {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+```
+
+## Testing Standards
+- Write unit tests for providers and utilities
+- Write integration tests for controllers
+- Use Jest as the testing framework
+- Implement test factories for common entities
+- Maintain test coverage above 80%
+
+## API Response Format
+```typescript
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+  meta?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+  };
+}
+```
+
+## Security Requirements
+- Implement rate limiting
+- Use helmet for security headers
+- Validate all input using a validation library (e.g., Zod, class-validator)
+- Implement proper authentication middleware
+- Use environment variables for sensitive data
+
+## Performance Guidelines
+- Implement caching where appropriate
+- Use connection pooling for databases
+- Implement request timeout handling
+- Use compression middleware
+- Implement proper indexing strategies
+
+## Monitoring and Logging
+- Use structured logging (Winston/Pino)
+- Implement request ID tracking
+- Log all API requests and responses
+- Monitor performance metrics
+- Implement health check endpoints
+
+## Critical Rules
+1. Always use TypeScript's strict mode
+2. Implement proper error handling
+3. Write comprehensive tests
+4. Follow the MCP pattern strictly
+5. Document all public methods and interfaces
+6. Use dependency injection
+7. Implement proper validation
+8. Follow security best practices
+9. Use async/await consistently
+10. Maintain proper logging 

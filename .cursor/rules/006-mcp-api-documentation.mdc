@@ -1,0 +1,232 @@
+---
+description: API documentation standards for MCP TypeScript server development
+globs: ["src/**/*.ts", "docs/**/*.ts", "openapi/**/*.yaml"]
+alwaysApply: true
+---
+# MCP API Documentation Standards
+
+## Context
+- When documenting MCP server APIs
+- When creating OpenAPI specifications
+- When generating API documentation
+- When documenting endpoints and models
+
+## OpenAPI Specification
+
+### Base Configuration
+```yaml
+openapi: 3.0.0
+info:
+  title: MCP Server API
+  version: 1.0.0
+  description: API documentation for MCP server
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.production.com
+    description: Production server
+```
+
+### Route Documentation
+```typescript
+/**
+ * @openapi
+ * /resources:
+ *   post:
+ *     summary: Create a new resource
+ *     tags: [Resources]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResourceCreate'
+ *     responses:
+ *       201:
+ *         description: Resource created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Resource'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+router.post('/resources', validateRequest(createResourceSchema), async (req, res) => {
+  // Implementation
+});
+```
+
+## Schema Documentation
+
+### Model Schemas
+```typescript
+/**
+ * @openapi
+ * components:
+ *   schemas:
+ *     Resource:
+ *       type: object
+ *       required:
+ *         - id
+ *         - name
+ *         - createdAt
+ *       properties:
+ *         id:
+ *           type: string
+ *           format: uuid
+ *           description: Unique identifier for the resource
+ *         name:
+ *           type: string
+ *           minLength: 1
+ *           maxLength: 100
+ *           description: Name of the resource
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: Creation timestamp
+ */
+interface Resource {
+  id: string;
+  name: string;
+  createdAt: Date;
+}
+```
+
+### Error Responses
+```typescript
+/**
+ * @openapi
+ * components:
+ *   responses:
+ *     BadRequest:
+ *       description: Invalid request parameters
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Error'
+ *     Unauthorized:
+ *       description: Authentication required
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Error'
+ */
+```
+
+## Documentation Generation
+
+### Swagger Configuration
+```typescript
+import swaggerJsdoc from 'swagger-jsdoc';
+
+const options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'MCP Server API',
+      version: '1.0.0',
+    },
+  },
+  apis: ['./src/routes/*.ts', './src/models/*.ts'],
+};
+
+const swaggerSpec = swaggerJsdoc(options);
+```
+
+### Documentation Middleware
+```typescript
+import swaggerUi from 'swagger-ui-express';
+
+app.use('/api-docs', swaggerUi.serve);
+app.get('/api-docs', swaggerUi.setup(swaggerSpec));
+```
+
+## API Versioning
+
+### Version Header
+```typescript
+interface VersionConfig {
+  current: string;
+  supported: string[];
+}
+
+const versionMiddleware = (config: VersionConfig) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const version = req.headers['api-version'] as string;
+    
+    if (!version || !config.supported.includes(version)) {
+      next(new UnsupportedVersionError());
+      return;
+    }
+    
+    req.apiVersion = version;
+    next();
+  };
+};
+```
+
+## Critical Rules
+
+1. Documentation Coverage
+   - Document all endpoints
+   - Include request/response examples
+   - Document error responses
+
+2. Schema Documentation
+   - Document all models
+   - Include field constraints
+   - Document relationships
+
+3. Version Management
+   - Document API versions
+   - Mark deprecated features
+   - Document breaking changes
+
+4. Examples
+   - Provide request examples
+   - Include response examples
+   - Document edge cases
+
+5. Authentication
+   - Document auth requirements
+   - Include token examples
+   - Document permissions
+
+6. Error Documentation
+   - Document error codes
+   - Include error examples
+   - Document recovery steps
+
+## Best Practices
+
+1. Documentation Structure
+   - Organize by resource type
+   - Group related endpoints
+   - Use consistent formatting
+
+2. Endpoint Documentation
+   - Clear descriptions
+   - Parameter constraints
+   - Response formats
+
+3. Schema Organization
+   - Reusable components
+   - Clear type definitions
+   - Documented validations
+
+4. Version Control
+   - Document changes
+   - Migration guides
+   - Deprecation notices
+
+5. Testing
+   - Validate documentation
+   - Test examples
+   - Check links
+
+6. Maintenance
+   - Regular updates
+   - Remove obsolete docs
+   - Keep examples current 

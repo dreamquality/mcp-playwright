@@ -1,0 +1,242 @@
+---
+description: Security standards and best practices for MCP TypeScript server development
+globs: ["src/**/*.ts"]
+alwaysApply: true
+---
+# MCP Security Standards
+
+## Context
+- When implementing security measures in MCP servers
+- When handling authentication and authorization
+- When protecting sensitive data and resources
+- When implementing API security
+
+## Authentication
+
+### JWT Implementation
+```typescript
+interface JWTConfig {
+  secret: string;
+  expiresIn: string;
+  algorithm: 'HS256' | 'RS256';
+}
+
+class JWTAuthenticator {
+  constructor(private config: JWTConfig) {}
+  
+  async generateToken(payload: Record<string, unknown>): Promise<string> {
+    return jwt.sign(payload, this.config.secret, {
+      expiresIn: this.config.expiresIn,
+      algorithm: this.config.algorithm
+    });
+  }
+  
+  async verifyToken(token: string): Promise<Record<string, unknown>> {
+    return jwt.verify(token, this.config.secret);
+  }
+}
+```
+
+### Authentication Middleware
+```typescript
+const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      throw new UnauthorizedError('No token provided');
+    }
+    
+    const decoded = await authenticator.verifyToken(token);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    next(new UnauthorizedError('Invalid token'));
+  }
+};
+```
+
+## Authorization
+
+### Role-Based Access Control
+```typescript
+enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user',
+  GUEST = 'guest'
+}
+
+interface RBACConfig {
+  roles: UserRole[];
+  permissions: Map<UserRole, string[]>;
+}
+
+class RBACAuthorizer {
+  constructor(private config: RBACConfig) {}
+  
+  hasPermission(role: UserRole, permission: string): boolean {
+    return this.config.permissions.get(role)?.includes(permission) ?? false;
+  }
+}
+```
+
+### Permission Middleware
+```typescript
+const requirePermission = (permission: string) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const userRole = req.user?.role as UserRole;
+    if (!rbacAuthorizer.hasPermission(userRole, permission)) {
+      next(new ForbiddenError('Insufficient permissions'));
+      return;
+    }
+    next();
+  };
+};
+```
+
+## Data Protection
+
+### Encryption Service
+```typescript
+interface EncryptionConfig {
+  algorithm: string;
+  secretKey: Buffer;
+  iv: Buffer;
+}
+
+class EncryptionService {
+  constructor(private config: EncryptionConfig) {}
+  
+  encrypt(data: string): string {
+    const cipher = crypto.createCipheriv(
+      this.config.algorithm,
+      this.config.secretKey,
+      this.config.iv
+    );
+    return Buffer.concat([
+      cipher.update(data),
+      cipher.final()
+    ]).toString('hex');
+  }
+  
+  decrypt(encryptedData: string): string {
+    const decipher = crypto.createDecipheriv(
+      this.config.algorithm,
+      this.config.secretKey,
+      this.config.iv
+    );
+    return Buffer.concat([
+      decipher.update(Buffer.from(encryptedData, 'hex')),
+      decipher.final()
+    ]).toString();
+  }
+}
+```
+
+## API Security
+
+### Rate Limiting
+```typescript
+interface RateLimitConfig {
+  windowMs: number;
+  max: number;
+}
+
+const rateLimiter = (config: RateLimitConfig) => {
+  const requests = new Map<string, number[]>();
+  
+  return (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now();
+    const ip = req.ip;
+    
+    const userRequests = requests.get(ip) || [];
+    const recentRequests = userRequests.filter(time => time > now - config.windowMs);
+    
+    if (recentRequests.length >= config.max) {
+      next(new TooManyRequestsError());
+      return;
+    }
+    
+    recentRequests.push(now);
+    requests.set(ip, recentRequests);
+    next();
+  };
+};
+```
+
+### Request Validation
+```typescript
+const validateRequest = (schema: z.ZodSchema) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await schema.parseAsync(req.body);
+      next();
+    } catch (error) {
+      next(new ValidationError('Invalid request data', error));
+    }
+  };
+};
+```
+
+## Critical Rules
+
+1. Authentication
+   - Use secure token generation
+   - Implement proper session management
+   - Secure password storage with bcrypt
+
+2. Authorization
+   - Implement RBAC
+   - Validate permissions
+   - Audit access attempts
+
+3. Data Protection
+   - Encrypt sensitive data
+   - Secure key management
+   - Implement data masking
+
+4. API Security
+   - Rate limiting
+   - Input validation
+   - CORS configuration
+
+5. Security Headers
+   - Use Helmet middleware
+   - Set secure cookies
+   - Enable CSRF protection
+
+6. Error Handling
+   - Sanitize error messages
+   - Log security events
+   - Implement retry limits
+
+## Best Practices
+
+1. Password Security
+   - Enforce strong passwords
+   - Implement password expiry
+   - Secure reset process
+
+2. Token Management
+   - Short token expiry
+   - Secure token storage
+   - Token refresh mechanism
+
+3. Data Access
+   - Principle of least privilege
+   - Data access logging
+   - Regular access reviews
+
+4. API Protection
+   - API versioning
+   - Request throttling
+   - API documentation
+
+5. Monitoring
+   - Security event logging
+   - Anomaly detection
+   - Regular audits
+
+6. Compliance
+   - GDPR compliance
+   - Data retention policies
+   - Regular security reviews 
